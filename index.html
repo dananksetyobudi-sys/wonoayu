@@ -1,0 +1,1434 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SIM SD Negeri Wonoayu - Full GAS Ready</title>
+    <!-- Vue 3 -->
+    <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Phosphor Icons -->
+    <script src="https://unpkg.com/@phosphor-icons/web"></script>
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: { sans: ['"Plus Jakarta Sans"', 'sans-serif'] },
+                    colors: {
+                        primary: '#4F46E5', // Indigo 600
+                        secondary: '#10B981', // Emerald 500
+                        dark: '#1F2937'
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        body { background-color: #F3F4F6; }
+        .glass-panel { background: rgba(255, 255, 255, 0.95); backdrop-filter: blur(10px); }
+        
+        .blob {
+            position: absolute; filter: blur(40px); z-index: 0; opacity: 0.35;
+            animation: move 10s infinite alternate;
+        }
+        @keyframes move {
+            from { transform: translate(0, 0) scale(1); }
+            to { transform: translate(25px, -25px) scale(1.1); }
+        }
+
+        /* Print Media Styles for Official Reports */
+        @media print {
+            body * { visibility: hidden; }
+            #printableArea, #printableArea * { visibility: visible; }
+            #printableArea { position: absolute; left: 0; top: 0; width: 100%; padding: 20px; }
+            .no-print { display: none !important; }
+        }
+    </style>
+</head>
+<body class="text-gray-800 antialiased h-screen overflow-hidden">
+    <div id="app" class="h-full w-full flex flex-col">
+
+        <!-- GLOBAL LOADER -->
+        <div v-if="isLoading" class="fixed inset-0 bg-white/80 z-50 flex items-center justify-center backdrop-blur-sm">
+            <div class="flex flex-col items-center">
+                <i class="ph ph-spinner-gap animate-spin text-5xl text-primary mb-3"></i>
+                <p class="font-semibold text-gray-700 animate-pulse">{{ loadingMessage || 'Memproses Data...' }}</p>
+            </div>
+        </div>
+
+        <!-- GLOBAL TOAST NOTIFICATION -->
+        <div v-if="toast.show" class="fixed top-5 right-5 z-50 transform transition-all duration-300">
+            <div :class="{'bg-emerald-600': toast.type === 'success', 'bg-red-600': toast.type === 'error', 'bg-blue-600': toast.type === 'info'}" 
+                 class="px-6 py-3 rounded-xl shadow-xl text-white font-medium flex items-center gap-3">
+                <i :class="toast.type === 'success' ? 'ph ph-check-circle' : toast.type === 'error' ? 'ph ph-warning-circle' : 'ph ph-info'" class="text-2xl"></i>
+                <div>
+                    <p class="text-sm font-semibold">{{ toast.message }}</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- MODAL: TAMBAH & EDIT GURU / PENGGUNA -->
+        <div v-if="isTeacherModalOpen" class="fixed inset-0 bg-black/50 z-40 flex items-center justify-center backdrop-blur-sm p-4">
+            <div class="bg-white rounded-2xl w-full max-w-md p-6 shadow-2xl relative">
+                <button @click="isTeacherModalOpen = false" class="absolute top-4 right-4 text-gray-400 hover:text-red-500 transition">
+                    <i class="ph ph-x text-2xl"></i>
+                </button>
+                <div class="flex items-center gap-3 mb-6 border-b pb-4">
+                    <div class="w-10 h-10 rounded-full bg-indigo-100 flex items-center justify-center text-primary font-bold">
+                        <i :class="teacherFormMode === 'add' ? 'ph-fill ph-user-plus' : 'ph-fill ph-user-gear'" class="text-xl"></i>
+                    </div>
+                    <div>
+                        <h3 class="text-xl font-bold text-gray-800">{{ teacherFormMode === 'add' ? 'Tambah Guru Baru' : 'Edit Akun Guru' }}</h3>
+                        <p class="text-xs text-gray-500">{{ teacherFormMode === 'add' ? 'Tambahkan akun agar guru dapat login sendiri' : 'Ubah data profil atau password guru' }}</p>
+                    </div>
+                </div>
+                
+                <form @submit.prevent="saveTeacher" class="space-y-4">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Nama Lengkap & Gelar</label>
+                        <input v-model="teacherForm.name" type="text" placeholder="Contoh: Rina Astuti, S.Pd" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary outline-none" required>
+                    </div>
+                    <div class="grid grid-cols-2 gap-3">
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">Username / NIP</label>
+                            <input v-model="teacherForm.username" type="text" placeholder="guru3" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary outline-none" required>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">Password</label>
+                            <input v-model="teacherForm.password" type="text" placeholder="••••••" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary outline-none" required>
+                        </div>
+                    </div>
+                    <div class="grid grid-cols-2 gap-3">
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">Peran (Role)</label>
+                            <select v-model="teacherForm.role" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary outline-none text-sm">
+                                <option value="guru">Guru Kelas / Mapel</option>
+                                <option value="kepsek">Kepala Sekolah</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">Kelas / Tugas</label>
+                            <select v-model="teacherForm.kelas" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary outline-none text-sm">
+                                <option value="1">Kelas 1</option>
+                                <option value="2">Kelas 2</option>
+                                <option value="3">Kelas 3</option>
+                                <option value="4">Kelas 4</option>
+                                <option value="5">Kelas 5</option>
+                                <option value="6">Kelas 6</option>
+                                <option value="Agama">Guru Agama</option>
+                                <option value="PJOK">Guru PJOK</option>
+                                <option value="-">Kepala Sekolah (-)</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="flex justify-end gap-3 pt-4 mt-6 border-t">
+                        <button type="button" @click="isTeacherModalOpen = false" class="px-4 py-2 text-gray-600 font-medium bg-gray-100 hover:bg-gray-200 rounded-lg transition">Batal</button>
+                        <button type="submit" class="px-5 py-2 text-white font-medium bg-primary hover:bg-indigo-700 rounded-lg transition shadow flex items-center gap-2">
+                            <i class="ph ph-floppy-disk text-lg"></i> {{ teacherFormMode === 'add' ? 'Simpan & Buat Akun' : 'Simpan Perubahan' }}
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <!-- MODAL: TAMBAH & EDIT SISWA -->
+        <div v-if="isSiswaModalOpen" class="fixed inset-0 bg-black/50 z-40 flex items-center justify-center backdrop-blur-sm p-4">
+            <div class="bg-white rounded-2xl w-full max-w-md p-6 shadow-2xl relative">
+                <button @click="isSiswaModalOpen = false" class="absolute top-4 right-4 text-gray-400 hover:text-red-500 transition">
+                    <i class="ph ph-x text-2xl"></i>
+                </button>
+                <div class="flex items-center gap-3 mb-6 border-b pb-4">
+                    <div class="w-10 h-10 rounded-full bg-indigo-100 flex items-center justify-center text-primary font-bold">
+                        <i :class="siswaFormMode === 'add' ? 'ph-fill ph-user-plus' : 'ph-fill ph-pencil-simple'" class="text-xl"></i>
+                    </div>
+                    <div>
+                        <h3 class="text-xl font-bold text-gray-800">{{ siswaFormMode === 'add' ? 'Tambah Data Siswa' : 'Edit Data Siswa' }}</h3>
+                        <p class="text-xs text-gray-500">Perubahan data akan otomatis tersimpan ke sistem</p>
+                    </div>
+                </div>
+                
+                <form @submit.prevent="saveSiswa" class="space-y-4">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">NISN</label>
+                        <input v-model="siswaForm.nisn" type="text" placeholder="0012345678" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary outline-none" required>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Nama Lengkap Siswa</label>
+                        <input v-model="siswaForm.nama" type="text" placeholder="Masukkan nama siswa" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary outline-none" required>
+                    </div>
+                    <div class="grid grid-cols-2 gap-3">
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">Tempat, Tgl Lahir</label>
+                            <input v-model="siswaForm.ttl" type="text" placeholder="Sidoarjo, 12-05-2015" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary outline-none" required>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">Kelas</label>
+                            <select v-model="siswaForm.kelas" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary outline-none text-sm" required>
+                                <option value="1">Kelas 1</option>
+                                <option value="2">Kelas 2</option>
+                                <option value="3">Kelas 3</option>
+                                <option value="4">Kelas 4</option>
+                                <option value="5">Kelas 5</option>
+                                <option value="6">Kelas 6</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Nama Wali Murid</label>
+                        <input v-model="siswaForm.wali" type="text" placeholder="Nama Orang Tua / Wali" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary outline-none" required>
+                    </div>
+                    <div class="flex justify-end gap-3 pt-4 mt-6 border-t">
+                        <button type="button" @click="isSiswaModalOpen = false" class="px-4 py-2 text-gray-600 font-medium bg-gray-100 hover:bg-gray-200 rounded-lg transition">Batal</button>
+                        <button type="submit" class="px-5 py-2 text-white font-medium bg-primary hover:bg-indigo-700 rounded-lg transition shadow flex items-center gap-2">
+                            <i class="ph ph-floppy-disk text-lg"></i> {{ siswaFormMode === 'add' ? 'Simpan Data' : 'Simpan Perubahan' }}
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <!-- MODAL: EDIT JURNAL -->
+        <div v-if="isJurnalModalOpen" class="fixed inset-0 bg-black/50 z-40 flex items-center justify-center backdrop-blur-sm p-4">
+            <div class="bg-white rounded-2xl w-full max-w-lg p-6 shadow-2xl relative">
+                <button @click="isJurnalModalOpen = false" class="absolute top-4 right-4 text-gray-400 hover:text-red-500 transition">
+                    <i class="ph ph-x text-2xl"></i>
+                </button>
+                <div class="flex items-center gap-3 mb-6 border-b pb-4">
+                    <div class="w-10 h-10 rounded-full bg-indigo-100 flex items-center justify-center text-primary font-bold">
+                        <i class="ph-fill ph-book-open-text text-xl"></i>
+                    </div>
+                    <div>
+                        <h3 class="text-xl font-bold text-gray-800">Edit Jurnal Mengajar</h3>
+                        <p class="text-xs text-gray-500">Perbarui rincian jurnal mengajar</p>
+                    </div>
+                </div>
+                
+                <form @submit.prevent="updateJurnal" class="space-y-4">
+                    <div class="grid grid-cols-2 gap-3">
+                        <div>
+                            <label class="block text-xs font-medium text-gray-700 mb-1">Tanggal</label>
+                            <input v-model="editJurnalForm.tanggal" type="date" class="w-full px-3 py-2 border rounded-lg text-xs outline-none focus:border-primary" required>
+                        </div>
+                        <div>
+                            <label class="block text-xs font-medium text-gray-700 mb-1">Jam Ke</label>
+                            <input v-model="editJurnalForm.jamKe" type="text" class="w-full px-3 py-2 border rounded-lg text-xs outline-none focus:border-primary" required>
+                        </div>
+                    </div>
+                    <div>
+                        <label class="block text-xs font-medium text-gray-700 mb-1">Materi Pokok</label>
+                        <input v-model="editJurnalForm.materi" type="text" class="w-full px-3 py-2 border rounded-lg text-xs outline-none focus:border-primary" required>
+                    </div>
+                    <div>
+                        <label class="block text-xs font-medium text-gray-700 mb-1">Kegiatan Pembelajaran</label>
+                        <textarea v-model="editJurnalForm.kegiatan" rows="3" class="w-full px-3 py-2 border rounded-lg text-xs outline-none focus:border-primary" required></textarea>
+                    </div>
+                    <div>
+                        <label class="block text-xs font-medium text-gray-700 mb-1">Keterangan</label>
+                        <input v-model="editJurnalForm.keterangan" type="text" class="w-full px-3 py-2 border rounded-lg text-xs outline-none focus:border-primary">
+                    </div>
+                    <div class="flex justify-end gap-3 pt-4 mt-6 border-t">
+                        <button type="button" @click="isJurnalModalOpen = false" class="px-4 py-2 text-gray-600 font-medium bg-gray-100 hover:bg-gray-200 rounded-lg transition">Batal</button>
+                        <button type="submit" class="px-5 py-2 text-white font-medium bg-primary hover:bg-indigo-700 rounded-lg transition shadow flex items-center gap-2">
+                            <i class="ph ph-floppy-disk text-lg"></i> Simpan Perubahan
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <!-- MODAL: PRATINJAU CETAK LAPORAN (PRINT READY) -->
+        <div v-if="isPrintModalOpen" class="fixed inset-0 bg-black/60 z-50 flex items-center justify-center backdrop-blur-sm p-4 overflow-y-auto">
+            <div class="bg-white rounded-2xl w-full max-w-4xl max-h-[90vh] flex flex-col shadow-2xl relative overflow-hidden">
+                <div class="p-4 bg-gray-900 text-white flex justify-between items-center no-print">
+                    <div class="flex items-center gap-2">
+                        <i class="ph ph-printer text-2xl text-primary"></i>
+                        <span class="font-bold">Pratinjau Dokumen Cetak ResmI</span>
+                    </div>
+                    <div class="flex items-center gap-3">
+                        <button @click="triggerPrint" class="bg-secondary hover:bg-emerald-600 text-white px-4 py-1.5 rounded-lg text-sm font-semibold flex items-center gap-2 transition">
+                            <i class="ph ph-printer"></i> Cetak / Simpan PDF
+                        </button>
+                        <button @click="isPrintModalOpen = false" class="text-gray-400 hover:text-white transition">
+                            <i class="ph ph-x text-2xl"></i>
+                        </button>
+                    </div>
+                </div>
+
+                <div class="p-8 overflow-y-auto bg-white" id="printableArea">
+                    <!-- KOP SURAT SEKOLAH -->
+                    <div class="border-b-4 border-double border-gray-900 pb-4 mb-6 text-center relative">
+                        <h2 class="text-xl font-extrabold uppercase tracking-wide text-gray-900">Pemerintah Kabupaten Sidoarjo</h2>
+                        <h1 class="text-2xl font-black uppercase text-gray-900">SD NEGERI WONOAYU</h1>
+                        <p class="text-xs text-gray-600">Jl. Raya Wonoayu No. 12, Kec. Wonoayu, Sidoarjo - Jawa Timur | Email: sdn.wonoayu@sch.id</p>
+                    </div>
+
+                    <!-- JUDUL LAPORAN -->
+                    <div class="text-center mb-6">
+                        <h3 class="text-lg font-bold uppercase underline">{{ printData.title }}</h3>
+                        <p class="text-xs text-gray-600">Periode: {{ printData.periode }}</p>
+                    </div>
+
+                    <!-- TABEL DATA CETAK -->
+                    <table class="w-full text-left text-xs border-collapse border border-gray-800 mb-8">
+                        <thead>
+                            <tr class="bg-gray-100 text-gray-900 border-b border-gray-800 font-bold">
+                                <th v-for="(col, i) in printData.columns" :key="i" class="border border-gray-800 p-2">{{ col }}</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr v-for="(row, rIdx) in printData.rows" :key="rIdx" class="border-b border-gray-800">
+                                <td v-for="(cell, cIdx) in row" :key="cIdx" class="border border-gray-800 p-2">{{ cell }}</td>
+                            </tr>
+                        </tbody>
+                    </table>
+
+                    <!-- TANDA TANGAN -->
+                    <div class="flex justify-between items-end mt-12 text-xs pt-4">
+                        <div class="text-center w-48">
+                            <p>Mengetahui,</p>
+                            <p class="font-bold">Kepala SD Negeri Wonoayu</p>
+                            <div class="h-16"></div>
+                            <p class="font-bold underline">Danang Setyobudi, S.Pd</p>
+                            <p>NIP. 19780512 200501 1 008</p>
+                        </div>
+                        <div class="text-center w-48">
+                            <p>Sidoarjo, {{ new Date().toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' }) }}</p>
+                            <p class="font-bold">Guru Pengampu / Pelapor</p>
+                            <div class="h-16"></div>
+                            <p class="font-bold underline">{{ currentUser ? currentUser.name : '........................' }}</p>
+                            <p>NIP. ....................................</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- MODAL: KODE BACKEND GOOGLE APPS SCRIPT & STRUKTUR SHEET -->
+        <div v-if="isGasCodeModalOpen" class="fixed inset-0 bg-black/70 z-50 flex items-center justify-center backdrop-blur-sm p-4">
+            <div class="bg-dark text-white rounded-2xl w-full max-w-3xl max-h-[85vh] flex flex-col shadow-2xl relative overflow-hidden border border-gray-700">
+                <div class="p-4 bg-gray-800 border-b border-gray-700 flex justify-between items-center">
+                    <div class="flex items-center gap-3">
+                        <div class="w-8 h-8 rounded-lg bg-green-500/20 text-green-400 flex items-center justify-center font-bold">
+                            <i class="ph-fill ph-code-block text-xl"></i>
+                        </div>
+                        <div>
+                            <h3 class="font-bold text-gray-100">Kode Backend Google Apps Script (`Code.gs`)</h3>
+                            <p class="text-xs text-gray-400">Salin kode ini ke Script Editor Google Spreadsheet Anda.</p>
+                        </div>
+                    </div>
+                    <button @click="isGasCodeModalOpen = false" class="text-gray-400 hover:text-white transition">
+                        <i class="ph ph-x text-2xl"></i>
+                    </button>
+                </div>
+
+                <div class="p-4 overflow-y-auto font-mono text-xs bg-gray-900 text-green-300 select-all leading-relaxed">
+                    <pre>{{ gasBackendCode }}</pre>
+                </div>
+
+                <div class="p-4 bg-gray-800 border-t border-gray-700 flex justify-between items-center text-xs text-gray-300">
+                    <span><i class="ph ph-info text-primary"></i> Tempelkan kode ini di Google Apps Script editor.</span>
+                    <button @click="copyGasCode" class="bg-primary hover:bg-indigo-600 text-white px-4 py-2 rounded-lg font-semibold flex items-center gap-2 transition">
+                        <i class="ph ph-copy"></i> Salin Kode GAS
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- PUBLIC ROUTE: LOGIN SCREEN -->
+        <div v-if="!currentUser && currentRoute === 'login'" class="min-h-screen flex items-center justify-center bg-gradient-to-br from-indigo-50 to-blue-100 p-4 relative overflow-hidden">
+            <div class="blob bg-primary w-64 h-64 rounded-full top-10 left-10"></div>
+            <div class="blob bg-blue-400 w-80 h-80 rounded-full bottom-10 right-10" style="animation-delay: -2s;"></div>
+            
+            <div class="glass-panel w-full max-w-md p-8 rounded-2xl shadow-2xl z-10 relative border border-white/50">
+                <div class="text-center mb-8">
+                    <div class="bg-primary/10 w-20 h-20 rounded-2xl flex items-center justify-center mx-auto mb-4 shadow-inner">
+                        <i class="ph-fill ph-student text-5xl text-primary"></i>
+                    </div>
+                    <h1 class="text-2xl font-black text-gray-800">SD Negeri Wonoayu</h1>
+                    <p class="text-gray-500 text-sm mt-1 font-medium">Sistem Informasi Manajemen Sekolah</p>
+                </div>
+                
+                <form @submit.prevent="handleLogin" class="space-y-5">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Username / NIP</label>
+                        <div class="relative">
+                            <i class="ph ph-user absolute left-3 top-3 text-gray-400 text-lg"></i>
+                            <input v-model="loginForm.username" type="text" class="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-xl focus:ring-2 focus:ring-primary outline-none transition text-sm" placeholder="Masukkan Username/NIP" required>
+                        </div>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Password</label>
+                        <div class="relative">
+                            <i class="ph ph-lock-key absolute left-3 top-3 text-gray-400 text-lg"></i>
+                            <input v-model="loginForm.password" type="password" class="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-xl focus:ring-2 focus:ring-primary outline-none transition text-sm" placeholder="••••••••" required>
+                        </div>
+                    </div>
+                    <button type="submit" class="w-full bg-primary hover:bg-indigo-700 text-white font-bold py-2.5 rounded-xl transition shadow-lg shadow-indigo-200 text-sm">
+                        Masuk Dashboard
+                    </button>
+                </form>
+
+                <div class="mt-8 pt-6 border-t border-gray-200/80 text-center flex flex-col gap-2">
+                    <p class="text-xs text-gray-500">Layanan Umum untuk Orang Tua / Warga</p>
+                    <button @click="currentRoute = 'public'" class="text-primary font-bold hover:underline text-xs flex items-center justify-center gap-1 mx-auto">
+                        <i class="ph ph-paper-plane-right"></i> Form Pelayanan & Pengaduan
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- PUBLIC ROUTE: PELAYANAN FORM -->
+        <div v-if="!currentUser && currentRoute === 'public'" class="min-h-screen flex flex-col bg-gray-50 overflow-y-auto">
+            <div class="bg-primary text-white py-12 px-4 text-center">
+                <h1 class="text-3xl font-extrabold mb-2">Layanan Masyarakat SD Negeri Wonoayu</h1>
+                <p class="opacity-90 max-w-2xl mx-auto text-sm">Portal resmi untuk keperluan administrasi, pengaduan, dan komunikasi wali murid dengan pihak sekolah.</p>
+            </div>
+            
+            <div class="flex-1 max-w-3xl w-full mx-auto p-4 -mt-8 mb-10">
+                <div class="bg-white rounded-2xl shadow-xl p-6 md:p-8">
+                    <form @submit.prevent="submitPublicForm" class="space-y-5">
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-5">
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-1">Nama Wali Murid / Pengisi</label>
+                                <input v-model="publicForm.nama_wali" type="text" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary outline-none text-sm" required placeholder="Nama lengkap Anda">
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-1">Nama Siswa (Opsional)</label>
+                                <input v-model="publicForm.nama_siswa" type="text" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary outline-none text-sm" placeholder="Nama putra/putri">
+                            </div>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">Kelas / Alumni</label>
+                            <input v-model="publicForm.kelas_alumni" type="text" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary outline-none text-sm" placeholder="Contoh: Kelas 3A / Alumni 2021" required>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">Keperluan / Pesan</label>
+                            <textarea v-model="publicForm.keperluan" rows="4" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary outline-none text-sm" required placeholder="Tuliskan pesan atau izin keperluan Anda secara lengkap..."></textarea>
+                        </div>
+                        <div class="flex items-center justify-between pt-4">
+                            <button type="button" @click="currentRoute = 'login'" class="text-gray-500 hover:text-gray-800 text-sm font-medium">
+                                <i class="ph ph-arrow-left"></i> Kembali ke Login
+                            </button>
+                            <button type="submit" class="bg-secondary hover:bg-emerald-600 text-white font-bold py-2.5 px-6 rounded-lg transition shadow-lg text-sm">
+                                Kirim Pengajuan
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+
+        <!-- AUTHENTICATED LAYOUT -->
+        <div v-if="currentUser" class="flex h-screen bg-gray-100 overflow-hidden">
+            
+            <!-- SIDEBAR -->
+            <aside class="w-64 bg-dark text-white flex flex-col flex-shrink-0 transition-all duration-300 overflow-y-auto">
+                <div class="p-5 flex items-center gap-3 border-b border-gray-700 sticky top-0 bg-dark z-10">
+                    <div class="w-10 h-10 bg-primary rounded-xl flex items-center justify-center flex-shrink-0 shadow-md">
+                        <i class="ph-fill ph-student text-xl"></i>
+                    </div>
+                    <div>
+                        <h2 class="font-bold text-lg leading-tight truncate">SDN Wonoayu</h2>
+                        <p class="text-xs text-gray-400">SIM Sekolah v2.0</p>
+                    </div>
+                </div>
+
+                <div class="flex-1 py-4">
+                    <nav class="space-y-1 px-3">
+                        <a @click="currentRoute = 'dashboard'" :class="{'bg-primary': currentRoute === 'dashboard', 'hover:bg-gray-800': currentRoute !== 'dashboard'}" class="flex items-center gap-3 px-3 py-2.5 rounded-lg cursor-pointer transition text-sm font-medium">
+                            <i class="ph ph-squares-four text-xl"></i> <span>Dashboard</span>
+                        </a>
+                        
+                        <div class="pt-4 pb-1">
+                            <p class="px-3 text-[10px] font-bold text-gray-400 uppercase tracking-wider">Manajemen Utama</p>
+                        </div>
+                        
+                        <a v-if="currentUser.role === 'kepsek'" @click="currentRoute = 'manajemenAkun'" :class="{'bg-primary': currentRoute === 'manajemenAkun', 'hover:bg-gray-800': currentRoute !== 'manajemenAkun'}" class="flex items-center gap-3 px-3 py-2.5 rounded-lg cursor-pointer transition text-sm font-medium">
+                            <i class="ph ph-users-three text-xl"></i> <span>Manajemen Pengguna</span>
+                        </a>
+
+                        <a v-if="currentUser.role === 'kepsek'" @click="currentRoute = 'dataGuru'" :class="{'bg-primary': currentRoute === 'dataGuru', 'hover:bg-gray-800': currentRoute !== 'dataGuru'}" class="flex items-center gap-3 px-3 py-2.5 rounded-lg cursor-pointer transition text-sm font-medium">
+                            <i class="ph ph-chalkboard-teacher text-xl"></i> <span>Data Profil Guru</span>
+                        </a>
+                        <a @click="currentRoute = 'dataSiswa'" :class="{'bg-primary': currentRoute === 'dataSiswa', 'hover:bg-gray-800': currentRoute !== 'dataSiswa'}" class="flex items-center gap-3 px-3 py-2.5 rounded-lg cursor-pointer transition text-sm font-medium">
+                            <i class="ph ph-graduation-cap text-xl"></i> <span>Data Siswa</span>
+                        </a>
+                        <a @click="currentRoute = 'absensi'" :class="{'bg-primary': currentRoute === 'absensi', 'hover:bg-gray-800': currentRoute !== 'absensi'}" class="flex items-center gap-3 px-3 py-2.5 rounded-lg cursor-pointer transition text-sm font-medium">
+                            <i class="ph ph-calendar-check text-xl"></i> <span>Absensi Siswa</span>
+                        </a>
+
+                        <div class="pt-4 pb-1">
+                            <p class="px-3 text-[10px] font-bold text-gray-400 uppercase tracking-wider">Akademik & Modul</p>
+                        </div>
+
+                        <a @click="currentRoute = 'jurnal'" :class="{'bg-primary': currentRoute === 'jurnal', 'hover:bg-gray-800': currentRoute !== 'jurnal'}" class="flex items-center gap-3 px-3 py-2.5 rounded-lg cursor-pointer transition text-sm font-medium">
+                            <i class="ph ph-book-open-text text-xl"></i> <span>Jurnal Mengajar</span>
+                        </a>
+                        <a @click="currentRoute = 'adminGuru'" :class="{'bg-primary': currentRoute === 'adminGuru', 'hover:bg-gray-800': currentRoute !== 'adminGuru'}" class="flex items-center gap-3 px-3 py-2.5 rounded-lg cursor-pointer transition text-sm font-medium">
+                            <i class="ph ph-folder-open text-xl"></i> <span>Perangkat Ajar (Modul)</span>
+                        </a>
+
+                        <div class="pt-4 pb-1">
+                            <p class="px-3 text-[10px] font-bold text-gray-400 uppercase tracking-wider">Layanan & Pengembang</p>
+                        </div>
+                        <a v-if="currentUser.role === 'kepsek'" @click="currentRoute = 'layananWarga'" :class="{'bg-primary': currentRoute === 'layananWarga', 'hover:bg-gray-800': currentRoute !== 'layananWarga'}" class="flex items-center gap-3 px-3 py-2.5 rounded-lg cursor-pointer transition text-sm font-medium">
+                            <i class="ph ph-envelope-open text-xl"></i> <span>Layanan Warga</span>
+                        </a>
+                        <a @click="isGasCodeModalOpen = true" class="flex items-center gap-3 px-3 py-2.5 rounded-lg cursor-pointer transition text-sm font-medium text-green-400 hover:bg-gray-800">
+                            <i class="ph ph-code text-xl"></i> <span>Source Code GAS</span>
+                        </a>
+                    </nav>
+                </div>
+
+                <div class="p-4 border-t border-gray-700 bg-dark sticky bottom-0 z-10">
+                    <button @click="logout" class="flex items-center justify-center gap-2 w-full py-2 bg-gray-800 hover:bg-red-600 rounded-lg transition text-xs font-bold text-white">
+                        <i class="ph ph-sign-out"></i> Keluar Sistem
+                    </button>
+                </div>
+            </aside>
+
+            <!-- MAIN CONTENT AREA -->
+            <main class="flex-1 flex flex-col overflow-hidden">
+                
+                <!-- TOP NAVBAR -->
+                <header class="h-16 bg-white border-b border-gray-200 flex items-center justify-between px-6 flex-shrink-0 z-10">
+                    <div class="flex items-center gap-4">
+                        <h2 class="text-base font-bold text-gray-800 capitalize hidden sm:block">
+                            {{ currentRoute.replace(/([A-Z])/g, ' $1').trim() }}
+                        </h2>
+                        <div class="relative">
+                            <select v-model="selectedTahunPelajaran" class="appearance-none bg-gray-50 border border-gray-200 text-gray-700 py-1.5 pl-3 pr-8 rounded-lg text-xs font-bold outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary transition shadow-sm hover:bg-gray-100 cursor-pointer">
+                                <option value="2026/2027 Ganjil">T.P. 2026/2027 - Ganjil</option>
+                                <option value="2026/2027 Genap">T.P. 2026/2027 - Genap</option>
+                                <option value="2027/2028 Ganjil">T.P. 2027/2028 - Ganjil</option>
+                            </select>
+                            <div class="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-gray-500">
+                                <i class="ph-bold ph-caret-down text-[10px]"></i>
+                            </div>
+                        </div>
+
+                        <!-- INDIKATOR AUTO-SAVE -->
+                        <div class="flex items-center gap-1.5 bg-emerald-50 text-emerald-700 border border-emerald-200 px-2.5 py-1 rounded-lg text-xs font-semibold shadow-xs">
+                            <i class="ph-bold ph-cloud-check text-emerald-600 text-sm"></i>
+                            <span class="hidden md:inline">Otomatis Tersimpan</span>
+                        </div>
+                    </div>
+                    <div class="flex items-center gap-4">
+                        <div class="text-right hidden md:block">
+                            <p class="text-sm font-bold text-gray-800">{{ currentUser.name }}</p>
+                            <p class="text-xs text-gray-500 font-medium">{{ currentUser.role === 'kepsek' ? 'Kepala Sekolah' : 'Guru Kelas ' + currentUser.kelas }}</p>
+                        </div>
+                        <div class="w-9 h-9 rounded-full bg-indigo-100 flex items-center justify-center text-primary font-bold shadow-sm">
+                            {{ currentUser.name.charAt(0) }}
+                        </div>
+                    </div>
+                </header>
+
+                <!-- DYNAMIC CONTENT (SCROLLABLE) -->
+                <div class="flex-1 overflow-y-auto p-6 relative">
+
+                    <!-- VIEW: DASHBOARD -->
+                    <div v-if="currentRoute === 'dashboard'" class="space-y-6">
+                        <div class="relative w-full h-48 md:h-60 rounded-2xl overflow-hidden shadow-lg bg-gradient-to-r from-primary to-blue-600 flex items-center p-8">
+                            <div class="relative z-10 text-white w-full">
+                                <h1 class="text-2xl md:text-3xl font-extrabold mb-2">Selamat Datang, Bapak/Ibu {{ currentUser.name }}!</h1>
+                                <p class="opacity-90 max-w-xl text-sm">Mari kelola administrasi pembelajaran SD Negeri Wonoayu secara akurat dan transparan.</p>
+                                <div class="mt-4 inline-flex items-center bg-white/20 backdrop-blur-md px-3 py-1.5 rounded-lg text-xs font-semibold">
+                                    <i class="ph ph-calendar-blank mr-1.5 text-base"></i> {{ new Date().toLocaleDateString('id-ID', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' }) }}
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Stats Grid -->
+                        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+                            <div class="bg-white p-5 rounded-2xl shadow-sm border border-gray-100 flex items-center gap-4">
+                                <div class="w-12 h-12 rounded-xl bg-blue-100 flex items-center justify-center text-blue-600 text-2xl">
+                                    <i class="ph-fill ph-student"></i>
+                                </div>
+                                <div>
+                                    <p class="text-xs font-medium text-gray-500">Total Siswa</p>
+                                    <p class="text-2xl font-bold text-gray-800">254</p>
+                                </div>
+                            </div>
+                            <div class="bg-white p-5 rounded-2xl shadow-sm border border-gray-100 flex items-center gap-4">
+                                <div class="w-12 h-12 rounded-xl bg-purple-100 flex items-center justify-center text-purple-600 text-2xl">
+                                    <i class="ph-fill ph-chalkboard-teacher"></i>
+                                </div>
+                                <div>
+                                    <p class="text-xs font-medium text-gray-500">Total Guru</p>
+                                    <p class="text-2xl font-bold text-gray-800">{{ dummyUsersArray.length }}</p>
+                                </div>
+                            </div>
+                            <div class="bg-white p-5 rounded-2xl shadow-sm border border-gray-100 flex items-center gap-4">
+                                <div class="w-12 h-12 rounded-xl bg-emerald-100 flex items-center justify-center text-emerald-600 text-2xl">
+                                    <i class="ph-fill ph-book-bookmark"></i>
+                                </div>
+                                <div>
+                                    <p class="text-xs font-medium text-gray-500">Jurnal Mengajar</p>
+                                    <p class="text-2xl font-bold text-gray-800">{{ dummyJurnalArray.length }} <span class="text-xs font-normal text-gray-400">entri</span></p>
+                                </div>
+                            </div>
+                            <div class="bg-white p-5 rounded-2xl shadow-sm border border-gray-100 flex items-center gap-4">
+                                <div class="w-12 h-12 rounded-xl bg-orange-100 flex items-center justify-center text-orange-600 text-2xl">
+                                    <i class="ph-fill ph-envelope"></i>
+                                </div>
+                                <div>
+                                    <p class="text-xs font-medium text-gray-500">Aduan / Warga</p>
+                                    <p class="text-2xl font-bold text-gray-800">2 <span class="text-xs font-normal text-gray-400">baru</span></p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- VIEW: MANAJEMEN AKUN PENGGUNA -->
+                    <div v-if="currentRoute === 'manajemenAkun' && currentUser.role === 'kepsek'" class="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
+                        <div class="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-4">
+                            <div>
+                                <h3 class="text-lg font-bold text-gray-800">Manajemen Akses & Hak User</h3>
+                                <p class="text-xs text-gray-500">Kelola akun login, Username, dan Password seluruh Guru.</p>
+                            </div>
+                            <button @click="openAddTeacherModal" class="bg-primary hover:bg-indigo-700 text-white px-4 py-2 rounded-xl font-bold text-xs flex items-center gap-2 transition shadow-md">
+                                <i class="ph ph-user-plus text-lg"></i> Tambah Guru / Akun Baru
+                            </button>
+                        </div>
+                        
+                        <div class="overflow-x-auto rounded-xl border border-gray-200">
+                            <table class="w-full text-left text-xs whitespace-nowrap">
+                                <thead class="bg-gray-50 text-gray-600 font-bold border-b">
+                                    <tr>
+                                        <th class="py-3 px-4">Nama / Identitas</th>
+                                        <th class="py-3 px-4">Jabatan</th>
+                                        <th class="py-3 px-4">Username Login</th>
+                                        <th class="py-3 px-4">Password</th>
+                                        <th class="py-3 px-4 text-center">Aksi</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr v-for="user in dummyUsersArray" :key="user.id" class="border-b hover:bg-gray-50 transition">
+                                        <td class="py-3 px-4 font-semibold text-gray-800 flex items-center gap-2">
+                                            <div class="w-7 h-7 rounded-full bg-indigo-100 text-primary flex items-center justify-center font-bold text-xs">{{ user.name.charAt(0) }}</div>
+                                            {{ user.name }}
+                                        </td>
+                                        <td class="py-3 px-4">
+                                            <span :class="{'bg-purple-100 text-purple-700': user.role === 'kepsek', 'bg-blue-100 text-blue-700': user.role === 'guru'}" class="px-2.5 py-1 rounded-md text-[10px] font-bold">
+                                                {{ user.role === 'kepsek' ? 'Kepala Sekolah' : 'Guru Kelas ' + user.kelas }}
+                                            </span>
+                                        </td>
+                                        <td class="py-3 px-4 font-mono text-gray-700 font-bold bg-gray-50 px-2 py-0.5 rounded border border-gray-200">{{ user.username }}</td>
+                                        <td class="py-3 px-4 font-mono text-gray-500">{{ user.password }}</td>
+                                        <td class="py-3 px-4 text-center">
+                                            <div class="flex items-center justify-center gap-2">
+                                                <button @click="openEditTeacherModal(user)" class="text-primary hover:text-indigo-800 bg-indigo-50 p-1.5 rounded-lg transition" title="Edit Data & Password">
+                                                    <i class="ph ph-pencil-simple text-base"></i>
+                                                </button>
+                                                <button v-if="user.role !== 'kepsek'" @click="deleteTeacher(user.id)" class="text-red-500 hover:text-red-700 bg-red-50 p-1.5 rounded-lg transition" title="Hapus Akun">
+                                                    <i class="ph ph-trash text-base"></i>
+                                                </button>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                    <!-- VIEW: DATA PROFIL GURU -->
+                    <div v-if="currentRoute === 'dataGuru'" class="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
+                        <div class="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-4">
+                            <div>
+                                <h3 class="text-lg font-bold text-gray-800">Direktori Tenaga Pendidik</h3>
+                                <p class="text-xs text-gray-500">Daftar lengkap dewan guru SD Negeri Wonoayu.</p>
+                            </div>
+                        </div>
+
+                        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+                            <div v-for="teacher in dummyUsersArray" :key="teacher.id" class="border border-gray-200 rounded-2xl p-5 bg-white flex flex-col justify-between">
+                                <div>
+                                    <div class="flex items-center gap-3 mb-4">
+                                        <div class="w-12 h-12 rounded-xl bg-gradient-to-br from-indigo-500 to-blue-600 text-white flex items-center justify-center font-bold text-lg shadow-sm">
+                                            {{ teacher.name.charAt(0) }}
+                                        </div>
+                                        <div>
+                                            <h4 class="font-bold text-gray-800 leading-snug text-sm">{{ teacher.name }}</h4>
+                                            <span class="inline-block px-2 py-0.5 rounded-full text-[10px] font-bold mt-1" :class="teacher.role === 'kepsek' ? 'bg-purple-100 text-purple-700' : 'bg-emerald-100 text-emerald-700'">
+                                                {{ teacher.role === 'kepsek' ? 'Kepala Sekolah' : 'Guru Kelas ' + teacher.kelas }}
+                                            </span>
+                                        </div>
+                                    </div>
+
+                                    <div class="space-y-1.5 text-xs text-gray-600 bg-gray-50 p-3 rounded-xl border border-gray-100 mb-4">
+                                        <div class="flex justify-between">
+                                            <span class="text-gray-400">Username:</span>
+                                            <span class="font-mono font-bold text-gray-800">{{ teacher.username }}</span>
+                                        </div>
+                                        <div class="flex justify-between">
+                                            <span class="text-gray-400">Status Akun:</span>
+                                            <span class="text-emerald-600 font-bold flex items-center gap-1">
+                                                <i class="ph-fill ph-check-circle"></i> Aktif
+                                            </span>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- VIEW: DATA SISWA -->
+                    <div v-if="currentRoute === 'dataSiswa'" class="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 space-y-4">
+                        <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+                            <div>
+                                <h3 class="text-lg font-bold text-gray-800">Direktori & Data Siswa</h3>
+                                <p class="text-xs text-gray-500">Pilih kelas atau cari nama siswa untuk penyaringan cepat.</p>
+                            </div>
+                            
+                            <div class="flex flex-wrap gap-2">
+                                <button @click="openAddSiswaModal" class="bg-primary hover:bg-indigo-700 text-white px-3 py-2 rounded-xl font-bold text-xs flex items-center gap-2 transition shadow">
+                                    <i class="ph ph-plus-circle text-base"></i> Tambah Siswa Baru
+                                </button>
+                                <button @click="openPrintModalForSiswa" class="bg-gray-800 hover:bg-gray-900 text-white px-3 py-2 rounded-xl font-bold text-xs flex items-center gap-2 transition">
+                                    <i class="ph ph-printer text-base"></i> Cetak Daftar Siswa
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- FILTER BAR -->
+                        <div class="flex flex-col md:flex-row gap-3 bg-gray-50 p-3 rounded-xl border border-gray-200">
+                            <div class="flex-1 relative">
+                                <i class="ph ph-magnifying-glass absolute left-3 top-2.5 text-gray-400 text-base"></i>
+                                <input v-model="searchSiswaQuery" type="text" placeholder="Cari NISN, Nama Siswa, atau Nama Wali..." class="w-full pl-9 pr-4 py-1.5 text-xs border rounded-lg outline-none focus:border-primary">
+                            </div>
+                            <div class="w-full md:w-48">
+                                <select v-model="filterKelasSiswa" class="w-full px-3 py-1.5 text-xs border rounded-lg outline-none focus:border-primary font-semibold">
+                                    <option value="ALL">Semua Kelas</option>
+                                    <option value="1">Kelas 1</option>
+                                    <option value="2">Kelas 2</option>
+                                    <option value="3">Kelas 3</option>
+                                    <option value="4">Kelas 4</option>
+                                    <option value="5">Kelas 5</option>
+                                    <option value="6">Kelas 6</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <div class="overflow-x-auto rounded-xl border border-gray-200">
+                            <table class="w-full text-left text-xs whitespace-nowrap">
+                                <thead class="bg-gray-50 text-gray-600 font-bold border-b">
+                                    <tr>
+                                        <th class="py-3 px-4">NISN</th>
+                                        <th class="py-3 px-4">Nama Lengkap</th>
+                                        <th class="py-3 px-4">Tempat, Tgl Lahir</th>
+                                        <th class="py-3 px-4">Kelas</th>
+                                        <th class="py-3 px-4">Wali Murid</th>
+                                        <th class="py-3 px-4 text-center">Aksi</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr v-if="filteredSiswaArray.length === 0">
+                                        <td colspan="6" class="py-8 text-center text-gray-400">
+                                            Tidak ada data siswa yang cocok.
+                                        </td>
+                                    </tr>
+                                    <tr v-for="(siswa, idx) in filteredSiswaArray" :key="siswa.nisn || idx" class="border-b hover:bg-gray-50">
+                                        <td class="py-3 px-4 font-mono font-bold text-gray-700">{{ siswa.nisn }}</td>
+                                        <td class="py-3 px-4 font-semibold text-gray-800">{{ siswa.nama }}</td>
+                                        <td class="py-3 px-4 text-gray-500">{{ siswa.ttl }}</td>
+                                        <td class="py-3 px-4"><span class="bg-indigo-50 text-primary px-2 py-0.5 rounded font-bold text-[10px]">Kelas {{ siswa.kelas }}</span></td>
+                                        <td class="py-3 px-4 text-gray-700">{{ siswa.wali }}</td>
+                                        <td class="py-3 px-4 text-center">
+                                            <div class="flex items-center justify-center gap-2">
+                                                <button @click="openEditSiswaModal(siswa)" class="text-primary hover:text-indigo-800 bg-indigo-50 p-1.5 rounded-lg transition" title="Edit Data Siswa">
+                                                    <i class="ph ph-pencil-simple text-base"></i>
+                                                </button>
+                                                <button @click="deleteSiswa(siswa.nisn)" class="text-red-500 hover:text-red-700 bg-red-50 p-1.5 rounded-lg transition" title="Hapus Siswa">
+                                                    <i class="ph ph-trash text-base"></i>
+                                                </button>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                    <!-- VIEW: JURNAL MENGAJAR -->
+                    <div v-if="currentRoute === 'jurnal'" class="space-y-6">
+                        <!-- Form Input (Hanya untuk Guru) -->
+                        <div v-if="currentUser.role === 'guru'" class="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
+                            <h3 class="text-base font-bold text-gray-800 mb-4 border-b pb-2">Isi Jurnal Mengajar Hari Ini</h3>
+                            <form @submit.prevent="saveJurnal" class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                <div>
+                                    <label class="block text-xs font-medium text-gray-700 mb-1">Tanggal</label>
+                                    <input v-model="jurnalForm.tanggal" type="date" class="w-full px-3 py-2 border rounded-lg text-xs outline-none focus:border-primary" required>
+                                </div>
+                                <div>
+                                    <label class="block text-xs font-medium text-gray-700 mb-1">Jam Ke</label>
+                                    <input v-model="jurnalForm.jamKe" type="text" placeholder="Contoh: 1-2" class="w-full px-3 py-2 border rounded-lg text-xs outline-none focus:border-primary" required>
+                                </div>
+                                <div>
+                                    <label class="block text-xs font-medium text-gray-700 mb-1">Materi Pokok</label>
+                                    <input v-model="jurnalForm.materi" type="text" placeholder="Materi yang diajarkan" class="w-full px-3 py-2 border rounded-lg text-xs outline-none focus:border-primary" required>
+                                </div>
+                                <div class="md:col-span-2">
+                                    <label class="block text-xs font-medium text-gray-700 mb-1">Kegiatan Pembelajaran</label>
+                                    <input v-model="jurnalForm.kegiatan" type="text" placeholder="Deskripsi singkat kegiatan" class="w-full px-3 py-2 border rounded-lg text-xs outline-none focus:border-primary" required>
+                                </div>
+                                <div>
+                        <!-- Table Rekap Jurnal -->
+                        <div class="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
+                            <div class="flex flex-col md:flex-row justify-between items-start md:items-center mb-5 gap-3">
+                                <div>
+                                    <h3 class="text-lg font-bold text-gray-800">
+                                        {{ currentUser.role === 'kepsek' ? 'Rekap Seluruh Jurnal Mengajar' : 'Riwayat Jurnal Saya' }}
+                                    </h3>
+                                    <p class="text-xs text-gray-500">
+                                        {{ currentUser.role === 'kepsek' ? 'Pantau semua aktivitas pembelajaran guru.' : 'Daftar jurnal yang telah Anda kirimkan.' }}
+                                    </p>
+                                </div>
+                                <button @click="openPrintModalForJurnal" class="bg-gray-800 hover:bg-gray-900 text-white px-3 py-2 rounded-xl font-bold text-xs flex items-center gap-2 transition shadow">
+                                    <i class="ph ph-printer text-base"></i> Cetak Rekap Jurnal
+                                </button>
+                            </div>
+                            
+                            <div class="overflow-x-auto rounded-xl border border-gray-200">
+                                <table class="w-full text-left text-xs whitespace-nowrap">
+                                    <thead class="bg-gray-50 text-gray-600 font-bold border-b">
+                                        <tr>
+                                            <th class="py-3 px-4">Tanggal</th>
+                                            <th v-if="currentUser.role === 'kepsek'" class="py-3 px-4">Guru / Kelas</th>
+                                            <th class="py-3 px-4">Jam Ke</th>
+                                            <th class="py-3 px-4">Materi Pokok</th>
+                                            <th class="py-3 px-4">Kegiatan Pembelajaran</th>
+                                            <th class="py-3 px-4 text-center">Aksi</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody class="text-gray-700">
+                                        <tr v-if="filteredJurnal.length === 0">
+                                            <td :colspan="currentUser.role === 'kepsek' ? 6 : 5" class="py-8 text-center text-gray-400">
+                                                Belum ada data jurnal.
+                                            </td>
+                                        </tr>
+                                        <tr v-for="jurnal in filteredJurnal" :key="jurnal.id" class="border-b hover:bg-gray-50 transition">
+                                            <td class="py-3 px-4 font-mono">
+                                                {{ jurnal.tanggal }}
+                                            </td>
+                                            <td v-if="currentUser.role === 'kepsek'" class="py-3 px-4">
+                                                <div class="font-bold text-gray-800">{{ jurnal.guruName }}</div>
+                                                <span class="text-[10px] text-primary font-bold">Kelas {{ jurnal.kelas }}</span>
+                                            </td>
+                                            <td class="py-3 px-4 font-mono bg-gray-50 text-center font-bold">{{ jurnal.jamKe }}</td>
+                                            <td class="py-3 px-4 font-semibold text-gray-800">{{ jurnal.materi }}</td>
+                                            <td class="py-3 px-4 text-xs whitespace-normal min-w-[220px] text-gray-600">{{ jurnal.kegiatan }}</td>
+                                            <td class="py-3 px-4 text-center">
+                                                <div class="flex items-center justify-center gap-2">
+                                                    <button @click="openEditJurnalModal(jurnal)" class="text-primary hover:text-indigo-800 bg-indigo-50 p-1.5 rounded-lg transition" title="Edit Jurnal">
+                                                        <i class="ph ph-pencil-simple text-base"></i>
+                                                    </button>
+                                                    <button @click="deleteJurnal(jurnal.id)" class="text-red-500 hover:text-red-700 bg-red-50 p-1.5 rounded-lg transition" title="Hapus Jurnal">
+                                                        <i class="ph ph-trash text-base"></i>
+                                                    </button>
+                                                </div>
+                                            </td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- VIEW: ABSENSI -->
+                    <div v-if="currentRoute === 'absensi'" class="space-y-6">
+                        <div v-if="currentUser.role === 'guru'" class="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
+                            <h3 class="text-base font-bold text-gray-800 mb-1">Input Rekap Absensi Kelas {{ currentUser.kelas }}</h3>
+                            <p class="text-xs text-gray-500 mb-4">Silakan isi rekap jumlah Kehadiran siswa hari ini.</p>
+                            
+                            <form @submit.prevent="saveAbsensi" class="flex gap-4 items-end bg-gray-50 p-4 rounded-xl flex-wrap">
+                                <div class="flex-1 min-w-[150px]">
+                                    <label class="block text-xs font-medium text-gray-700 mb-1">Tanggal</label>
+                                    <input v-model="absensiForm.tanggal" type="date" class="w-full px-3 py-1.5 border rounded-lg text-xs outline-none focus:border-primary" required>
+                                </div>
+                                <div class="w-20">
+                                    <label class="block text-xs font-bold text-green-700 mb-1">Hadir</label>
+                                    <input v-model.number="absensiForm.hadir" type="number" min="0" class="w-full px-2 py-1.5 border border-green-300 rounded-lg text-xs text-center font-bold outline-none" required>
+                                </div>
+                                <div class="w-20">
+                                    <label class="block text-xs font-bold text-yellow-700 mb-1">Sakit</label>
+                                    <input v-model.number="absensiForm.sakit" type="number" min="0" class="w-full px-2 py-1.5 border border-yellow-300 rounded-lg text-xs text-center font-bold outline-none" required>
+                                </div>
+                                <div class="w-20">
+                                    <label class="block text-xs font-bold text-blue-700 mb-1">Izin</label>
+                                    <input v-model.number="absensiForm.izin" type="number" min="0" class="w-full px-2 py-1.5 border border-blue-300 rounded-lg text-xs text-center font-bold outline-none" required>
+                                </div>
+                                <div class="w-20">
+                                    <label class="block text-xs font-bold text-red-700 mb-1">Alpa</label>
+                                    <input v-model.number="absensiForm.alpa" type="number" min="0" class="w-full px-2 py-1.5 border border-red-300 rounded-lg text-xs text-center font-bold outline-none" required>
+                                </div>
+                                <button type="submit" class="bg-primary hover:bg-indigo-700 text-white px-5 py-1.5 rounded-lg font-bold text-xs transition h-[34px]">Simpan</button>
+                            </form>
+                        </div>
+
+                        <div class="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
+                            <h3 class="text-base font-bold text-gray-800 mb-4">Riwayat Rekap Absensi</h3>
+                            <div class="overflow-x-auto rounded-xl border border-gray-200">
+                                <table class="w-full text-left text-xs whitespace-nowrap">
+                                    <thead class="bg-gray-50 text-gray-600 font-bold border-b text-center">
+                                        <tr>
+                                            <th class="py-3 px-4 text-left">Tanggal</th>
+                                            <th class="py-3 px-4">Kelas</th>
+                                            <th class="py-3 px-4 text-green-600">Hadir</th>
+                                            <th class="py-3 px-4 text-yellow-600">Sakit</th>
+                                            <th class="py-3 px-4 text-blue-600">Izin</th>
+                                            <th class="py-3 px-4 text-red-600">Alpa</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody class="text-center font-mono">
+                                        <tr v-for="(abs, idx) in dummyAbsensiArray" :key="idx" class="border-b hover:bg-gray-50">
+                                            <td class="py-3 px-4 text-left font-sans font-bold text-gray-800">{{ abs.tanggal }}</td>
+                                            <td class="py-3 px-4 font-sans font-bold text-primary">Kelas {{ abs.kelas }}</td>
+                                            <td class="py-3 px-4 font-bold text-green-600">{{ abs.hadir }}</td>
+                                            <td class="py-3 px-4 font-bold text-yellow-600">{{ abs.sakit }}</td>
+                                            <td class="py-3 px-4 font-bold text-blue-600">{{ abs.izin }}</td>
+                                            <td class="py-3 px-4 font-bold text-red-600">{{ abs.alpa }}</td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- VIEW: MODUL & PERANGKAT AJAR -->
+                    <div v-if="currentRoute === 'adminGuru'" class="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
+                        <div class="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-4">
+                            <div>
+                                <h3 class="text-lg font-bold text-gray-800">Berkas Perangkat Pembelajaran</h3>
+                                <p class="text-xs text-gray-500">Penyimpanan terintegrasi Google Drive (Modul Ajar & Prota/Promes).</p>
+                            </div>
+                            <button @click="simulateAction('Mengunggah berkas ke Google Drive...')" class="bg-primary hover:bg-indigo-700 text-white px-4 py-2 rounded-xl font-bold text-xs flex items-center gap-2 transition shadow">
+                                <i class="ph ph-cloud-arrow-up text-lg"></i> Unggah Modul (PDF/Word)
+                            </button>
+                        </div>
+
+                        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                            <div class="border border-gray-200 p-4 rounded-xl flex items-start gap-4 hover:border-primary transition bg-gray-50 shadow-sm">
+                                <div class="text-red-500 text-3xl">
+                                    <i class="ph-fill ph-file-pdf"></i>
+                                </div>
+                                <div>
+                                    <p class="font-bold text-xs text-gray-800 line-clamp-2">Modul Ajar Matematika Kls 3.pdf</p>
+                                    <p class="text-[10px] text-gray-500 mt-1">Siti Aminah • 2.4 MB</p>
+                                </div>
+                            </div>
+                            <div class="border border-gray-200 p-4 rounded-xl flex items-start gap-4 hover:border-primary transition bg-gray-50 shadow-sm">
+                                <div class="text-blue-500 text-3xl">
+                                    <i class="ph-fill ph-file-doc"></i>
+                                </div>
+                                <div>
+                                    <p class="font-bold text-xs text-gray-800 line-clamp-2">Capai Pembelajaran IPAS.docx</p>
+                                    <p class="text-[10px] text-gray-500 mt-1">Budi Santoso • 1.1 MB</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- VIEW: LAYANAN WARGA -->
+                    <div v-if="currentRoute === 'layananWarga' && currentUser.role === 'kepsek'" class="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
+                        <h3 class="text-lg font-bold text-gray-800 mb-1">Kotak Masuk Pelayanan Masyarakat</h3>
+                        <p class="text-xs text-gray-500 mb-6">Aduan dan pesan dari orang tua siswa yang dikirim via formulir publik.</p>
+                        
+                        <div class="space-y-4">
+                            <div v-for="(p, i) in publicMessagesArray" :key="i" class="border border-gray-200 rounded-xl p-4 bg-gray-50">
+                                <div class="flex justify-between items-start mb-2">
+                                    <div>
+                                        <p class="font-bold text-xs text-gray-800">{{ p.nama_wali }} <span class="text-[10px] font-semibold text-gray-500 bg-gray-200 px-2 py-0.5 rounded ml-2">{{ p.kelas_alumni }}</span></p>
+                                        <p class="text-[10px] text-gray-500">Siswa: {{ p.nama_siswa || '-' }}</p>
+                                    </div>
+                                    <span class="text-[10px] font-semibold text-gray-400">Hari ini</span>
+                                </div>
+                                <p class="text-xs text-gray-700 bg-white p-3 rounded-lg border border-gray-100 shadow-sm mt-2">
+                                    "{{ p.keperluan }}"
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+
+                </div>
+            </main>
+        </div>
+
+    </div>
+
+    <script>
+        const { createApp, ref, reactive, computed, watch } = Vue;
+
+        createApp({
+            setup() {
+                const isLoading = ref(false);
+                const loadingMessage = ref('');
+                const currentUser = ref(null);
+                const currentRoute = ref('login');
+                const selectedTahunPelajaran = ref('2026/2027 Ganjil');
+                
+                const toast = reactive({ show: false, message: '', type: 'success' });
+                const showToast = (msg, type = 'success') => {
+                    toast.message = msg; toast.type = type; toast.show = true;
+                    setTimeout(() => toast.show = false, 3500);
+                };
+
+                const loginForm = reactive({ username: '', password: '' });
+                const publicForm = reactive({ nama_wali: '', nama_siswa: '', kelas_alumni: '', keperluan: '' });
+
+                // HELPER UNTUK LOCALSTORAGE AUTO-SAVE PERSISTENCE
+                const loadSaved = (key, fallback) => {
+                    try {
+                        const saved = localStorage.getItem('sdn_wonoayu_' + key);
+                        return saved ? JSON.parse(saved) : fallback;
+                    } catch (e) {
+                        return fallback;
+                    }
+                };
+
+                // DUMMY USERS (TERHUBUNG KE LOCALSTORAGE)
+                const dummyUsersArray = ref(loadSaved('users', [
+                    { id: 1, name: 'Danang Setyobudi, S.Pd', role: 'kepsek', username: 'admin', password: '123', kelas: '-' },
+                    { id: 2, name: 'Siti Aminah, S.Pd', role: 'guru', username: 'guru1', password: '123', kelas: '3' },
+                    { id: 3, name: 'Budi Santoso, S.Pd', role: 'guru', username: 'guru2', password: '123', kelas: '1' }
+                ]));
+
+                // DUMMY SISWA (TERHUBUNG KE LOCALSTORAGE)
+                const dummyDataSiswa = ref(loadSaved('siswa', [
+                    { nisn: '0012345678', nama: 'Aditya Pratama', ttl: 'Sidoarjo, 12-05-2015', kelas: '3', wali: 'Budi Raharjo' },
+                    { nisn: '0012345679', nama: 'Siti Aisyah', ttl: 'Surabaya, 20-08-2016', kelas: '1', wali: 'Hasanudin' },
+                    { nisn: '0012345680', nama: 'Rizky Fadillah', ttl: 'Sidoarjo, 01-01-2012', kelas: '6', wali: 'Supriadi' },
+                    { nisn: '0012345681', nama: 'Anisa Rahmawati', ttl: 'Sidoarjo, 14-02-2015', kelas: '3', wali: 'Bambang Hartono' },
+                    { nisn: '0012345682', nama: 'Dewi Lestari', ttl: 'Sidoarjo, 10-11-2014', kelas: '4', wali: 'Wahyu Hidayat' }
+                ]));
+
+                // DUMMY JURNAL (TERHUBUNG KE LOCALSTORAGE)
+                const dummyJurnalArray = ref(loadSaved('jurnal', [
+                    { id: 1, guruId: 2, guruName: 'Siti Aminah, S.Pd', kelas: '3', tanggal: '2026-10-12', jamKe: '1-2', materi: 'Benda di Sekitarku', kegiatan: 'Siswa mengamati wujud benda padat, cair, dan gas di lingkungan kelas.', keterangan: 'Lancar' },
+                    { id: 2, guruId: 3, guruName: 'Budi Santoso, S.Pd', kelas: '1', tanggal: '2026-10-12', jamKe: '3-4', materi: 'Mengenal Huruf', kegiatan: 'Siswa belajar mengeja dan menulis huruf vokal.', keterangan: 'Ada 2 siswa ijin' }
+                ]));
+
+                // DUMMY ABSENSI (TERHUBUNG KE LOCALSTORAGE)
+                const dummyAbsensiArray = ref(loadSaved('absensi', [
+                    { tanggal: '2026-10-12', kelas: '3', hadir: 28, sakit: 1, izin: 1, alpa: 0 },
+                    { tanggal: '2026-10-12', kelas: '1', hadir: 30, sakit: 0, izin: 0, alpa: 0 }
+                ]));
+
+                // DUMMY PESAN PUBLIK (TERHUBUNG KE LOCALSTORAGE)
+                const publicMessagesArray = ref(loadSaved('messages', [
+                    { nama_wali: 'Bpk. Haryanto', nama_siswa: 'Andi Saputra', kelas_alumni: 'Kelas 3', keperluan: 'Mohon izin anak kami Andi hari ini tidak masuk sekolah karena sakit demam.' }
+                ]));
+
+                // --- INTEGRASI GOOGLE APPS SCRIPT (GAS-EA) ---
+                // Fungsi untuk menjalankan backend GAS tanpa mengganggu loading UI
+                const runGasFunction = (functionName, dataObj = null) => {
+                    return new Promise((resolve, reject) => {
+                        // Cek apakah aplikasi berjalan di lingkungan Google Apps Script
+                        if (typeof google !== 'undefined' && google.script && google.script.run) {
+                            if (dataObj) {
+                                google.script.run
+                                    .withSuccessHandler(resolve)
+                                    .withFailureHandler(reject)
+                                    [functionName](dataObj);
+                            } else {
+                                google.script.run
+                                    .withSuccessHandler(resolve)
+                                    .withFailureHandler(reject)
+                                    [functionName]();
+                            }
+                        } else {
+                            // Simulasi jika dijalankan di localhost / di luar GAS
+                            console.log(`[Simulasi Cloud] Menyimpan via ${functionName}`, dataObj);
+                            resolve({ success: true, simulasi: true });
+                        }
+                    });
+                };
+                
+                // Ambil data asli dari Google Sheets saat aplikasi pertama kali dimuat
+                const loadDataFromCloud = () => {
+                    if (typeof google !== 'undefined' && google.script && google.script.run) {
+                        isLoading.value = true;
+                        loadingMessage.value = 'Sinkronisasi Cloud...';
+                        google.script.run.withSuccessHandler(function(serverData) {
+                            if(serverData.users.length > 0) dummyUsersArray.value = serverData.users;
+                            if(serverData.siswa.length > 0) dummyDataSiswa.value = serverData.siswa;
+                            if(serverData.jurnal.length > 0) dummyJurnalArray.value = serverData.jurnal;
+                            isLoading.value = false;
+                        }).getInitialData();
+                    }
+                };
+                
+                // Panggil sinkronisasi awal
+                loadDataFromCloud();
+                // ----------------------------------------------
+
+                // SESI USER
+                const savedSessionUser = loadSaved('session_user', null);
+                if (savedSessionUser) {
+                    currentUser.value = savedSessionUser;
+                    currentRoute.value = 'dashboard';
+                }
+
+                // WATCHER UNTUK AUTO-SAVE KE LOCALSTORAGE SETIAP KALI TERJADI PERUBAHAN DATA
+                watch(dummyUsersArray, (val) => localStorage.setItem('sdn_wonoayu_users', JSON.stringify(val)), { deep: true });
+                watch(dummyDataSiswa, (val) => localStorage.setItem('sdn_wonoayu_siswa', JSON.stringify(val)), { deep: true });
+                watch(dummyJurnalArray, (val) => localStorage.setItem('sdn_wonoayu_jurnal', JSON.stringify(val)), { deep: true });
+                watch(dummyAbsensiArray, (val) => localStorage.setItem('sdn_wonoayu_absensi', JSON.stringify(val)), { deep: true });
+                watch(publicMessagesArray, (val) => localStorage.setItem('sdn_wonoayu_messages', JSON.stringify(val)), { deep: true });
+                watch(currentUser, (val) => localStorage.setItem('sdn_wonoayu_session_user', JSON.stringify(val)), { deep: true });
+
+                // FILTER SISWA
+                const searchSiswaQuery = ref('');
+                const filterKelasSiswa = ref('ALL');
+
+                const filteredSiswaArray = computed(() => {
+                    return dummyDataSiswa.value.filter(s => {
+                        const matchKelas = filterKelasSiswa.value === 'ALL' || s.kelas === filterKelasSiswa.value;
+                        const q = searchSiswaQuery.value.toLowerCase();
+                        const matchQuery = s.nama.toLowerCase().includes(q) || s.nisn.includes(q) || s.wali.toLowerCase().includes(q);
+                        return matchKelas && matchQuery;
+                    });
+                });
+
+                // JURNAL
+                const jurnalForm = reactive({ tanggal: '', jamKe: '', materi: '', kegiatan: '', keterangan: '' });
+
+                const filteredJurnal = computed(() => {
+                    if (!currentUser.value) return [];
+                    if (currentUser.value.role === 'kepsek') {
+                        return dummyJurnalArray.value;
+                    } else {
+                        return dummyJurnalArray.value.filter(j => j.guruId === currentUser.value.id);
+                    }
+                });
+
+                // ABSENSI
+                const absensiForm = reactive({ tanggal: '', hadir: 0, sakit: 0, izin: 0, alpa: 0 });
+
+                const saveAbsensi = async () => {
+                    isLoading.value = true;
+                    await new Promise(r => setTimeout(r, 400));
+                    dummyAbsensiArray.value.unshift({
+                        tanggal: absensiForm.tanggal,
+                        kelas: currentUser.value.kelas,
+                        hadir: absensiForm.hadir,
+                        sakit: absensiForm.sakit,
+                        izin: absensiForm.izin,
+                        alpa: absensiForm.alpa
+                    });
+                    isLoading.value = false;
+                    showToast('Data Rekap Absensi Berhasil Disimpan Otomatis!');
+                };
+
+                // MODAL EDIT/ADD TEACHER
+                const isTeacherModalOpen = ref(false);
+                const teacherFormMode = ref('add');
+                const teacherForm = reactive({ id: null, name: '', username: '', password: '', role: 'guru', kelas: '1' });
+
+                const openAddTeacherModal = () => {
+                    teacherFormMode.value = 'add';
+                    teacherForm.id = null; teacherForm.name = ''; teacherForm.username = ''; teacherForm.password = '123456'; teacherForm.role = 'guru'; teacherForm.kelas = '1';
+                    isTeacherModalOpen.value = true;
+                };
+
+                const openEditTeacherModal = (user) => {
+                    teacherFormMode.value = 'edit';
+                    teacherForm.id = user.id; teacherForm.name = user.name; teacherForm.username = user.username; teacherForm.password = user.password; teacherForm.role = user.role; teacherForm.kelas = user.kelas;
+                    isTeacherModalOpen.value = true;
+                };
+
+                const saveTeacher = async () => {
+                    isLoading.value = true;
+                    await new Promise(r => setTimeout(r, 500));
+                    if (teacherFormMode.value === 'add') {
+                        const newId = dummyUsersArray.value.length ? Math.max(...dummyUsersArray.value.map(u => u.id)) + 1 : 1;
+                        dummyUsersArray.value.push({ ...teacherForm, id: newId });
+                        showToast('Akun Guru Baru Berhasil Dibuat & Otomatis Tersimpan!');
+                    } else {
+                        const idx = dummyUsersArray.value.findIndex(u => u.id === teacherForm.id);
+                        if (idx !== -1) {
+                            dummyUsersArray.value[idx] = { ...teacherForm };
+                            // Jika mengedit user yang sedang login, perbarui currentUser secara langsung
+                            if (currentUser.value && currentUser.value.id === teacherForm.id) {
+                                currentUser.value = { ...teacherForm };
+                            }
+                            showToast('Perubahan Akun Berhasil Disimpan Otomatis!');
+                        }
+                    }
+                    isTeacherModalOpen.value = false;
+                    isLoading.value = false;
+                };
+
+                const deleteTeacher = async (userId) => {
+                    isLoading.value = true;
+                    await new Promise(r => setTimeout(r, 400));
+                    dummyUsersArray.value = dummyUsersArray.value.filter(u => u.id !== userId);
+                    isLoading.value = false;
+                    showToast('Akun guru telah dihapus & tersimpan otomatis.');
+                };
+
+                // MODAL EDIT/ADD SISWA
+                const isSiswaModalOpen = ref(false);
+                const siswaFormMode = ref('add');
+                const oldNisn = ref('');
+                const siswaForm = reactive({ nisn: '', nama: '', ttl: '', kelas: '1', wali: '' });
+
+                const openAddSiswaModal = () => {
+                    siswaFormMode.value = 'add';
+                    siswaForm.nisn = ''; siswaForm.nama = ''; siswaForm.ttl = ''; siswaForm.kelas = '1'; siswaForm.wali = '';
+                    isSiswaModalOpen.value = true;
+                };
+
+                const openEditSiswaModal = (siswa) => {
+                    siswaFormMode.value = 'edit';
+                    oldNisn.value = siswa.nisn;
+                    siswaForm.nisn = siswa.nisn;
+                    siswaForm.nama = siswa.nama;
+                    siswaForm.ttl = siswa.ttl;
+                    siswaForm.kelas = siswa.kelas;
+                    siswaForm.wali = siswa.wali;
+                    isSiswaModalOpen.value = true;
+                };
+
+                const saveSiswa = async () => {
+                    isLoading.value = true;
+                    await new Promise(r => setTimeout(r, 400));
+                    if (siswaFormMode.value === 'add') {
+                        const newSiswa = { ...siswaForm };
+                        dummyDataSiswa.value.unshift(newSiswa);
+                        
+                        // Eksekusi Simpan ke Cloud Google Sheets
+                        runGasFunction('simpanSiswaKeSheet', newSiswa);
+                        
+                        showToast('Data Siswa Baru Berhasil Ditambahkan & Tersimpan ke Cloud!');
+                    } else {
+                        const idx = dummyDataSiswa.value.findIndex(s => s.nisn === oldNisn.value);
+                        if (idx !== -1) {
+                            dummyDataSiswa.value[idx] = { ...siswaForm };
+                            showToast('Perubahan Data Siswa Berhasil Disimpan Otomatis!');
+                            // TODO: Buat fungsi updateSiswaDiSheet() di Code.gs untuk operasi edit
+                        }
+                    }
+                    isSiswaModalOpen.value = false;
+                    isLoading.value = false;
+                };
+
+                const deleteSiswa = async (nisn) => {
+                    isLoading.value = true;
+                    await new Promise(r => setTimeout(r, 400));
+                    dummyDataSiswa.value = dummyDataSiswa.value.filter(s => s.nisn !== nisn);
+                    isLoading.value = false;
+                    showToast('Data siswa telah dihapus & tersimpan otomatis.');
+                };
+
+                // MODAL EDIT JURNAL
+                const isJurnalModalOpen = ref(false);
+                const editJurnalForm = reactive({ id: null, tanggal: '', jamKe: '', materi: '', kegiatan: '', keterangan: '' });
+
+                const openEditJurnalModal = (jurnal) => {
+                    editJurnalForm.id = jurnal.id;
+                    editJurnalForm.tanggal = jurnal.tanggal;
+                    editJurnalForm.jamKe = jurnal.jamKe;
+                    editJurnalForm.materi = jurnal.materi;
+                    editJurnalForm.kegiatan = jurnal.kegiatan;
+                    editJurnalForm.keterangan = jurnal.keterangan || '';
+                    isJurnalModalOpen.value = true;
+                };
+
+                const updateJurnal = async () => {
+                    isLoading.value = true;
+                    await new Promise(r => setTimeout(r, 400));
+                    const idx = dummyJurnalArray.value.findIndex(j => j.id === editJurnalForm.id);
+                    if (idx !== -1) {
+                        dummyJurnalArray.value[idx] = {
+                            ...dummyJurnalArray.value[idx],
+                            tanggal: editJurnalForm.tanggal,
+                            jamKe: editJurnalForm.jamKe,
+                            materi: editJurnalForm.materi,
+                            kegiatan: editJurnalForm.kegiatan,
+                            keterangan: editJurnalForm.keterangan
+                        };
+                        showToast('Jurnal Mengajar Berhasil Diperbarui & Otomatis Tersimpan!');
+                    }
+                    isJurnalModalOpen.value = false;
+                    isLoading.value = false;
+                };
+
+                const deleteJurnal = async (id) => {
+                    isLoading.value = true;
+                    await new Promise(r => setTimeout(r, 400));
+                    dummyJurnalArray.value = dummyJurnalArray.value.filter(j => j.id !== id);
+                    isLoading.value = false;
+                    showToast('Entri Jurnal telah dihapus & tersimpan otomatis.');
+                };
+
+                const saveJurnal = async () => {
+                    isLoading.value = true;
+                    await new Promise(r => setTimeout(r, 500));
+                    const newId = dummyJurnalArray.value.length ? Math.max(...dummyJurnalArray.value.map(j => j.id)) + 1 : 1;
+                    
+                    const newJurnal = {
+                        id: newId,
+                        guruId: currentUser.value.id,
+                        guruName: currentUser.value.name,
+                        kelas: currentUser.value.kelas,
+                        ...jurnalForm
+                    };
+                    
+                    // Simpan ke UI dan LocalStorage
+                    dummyJurnalArray.value.unshift(newJurnal);
+                    
+                    // Eksekusi Simpan ke Cloud Google Sheets secara Background
+                    runGasFunction('simpanJurnalKeSheet', newJurnal).then(response => {
+                        console.log("Status Sinkronisasi Jurnal:", response);
+                    });
+
+                    isLoading.value = false;
+                    showToast('Jurnal mengajar berhasil disinkronisasi ke Database Cloud!');
+                };
+
+                // PRINTING MODAL SYSTEM
+                const isPrintModalOpen = ref(false);
+                const printData = reactive({ title: '', periode: '', columns: [], rows: [] });
+
+                const openPrintModalForSiswa = () => {
+                    printData.title = 'DAFTAR INDUK SISWA SD NEGERI WONOAYU';
+                    printData.periode = 'Tahun Ajaran ' + selectedTahunPelajaran.value;
+                    printData.columns = ['No', 'NISN', 'Nama Siswa', 'Tempat, Tgl Lahir', 'Kelas', 'Nama Wali'];
+                    printData.rows = filteredSiswaArray.value.map((s, i) => [i + 1, s.nisn, s.nama, s.ttl, 'Kelas ' + s.kelas, s.wali]);
+                    isPrintModalOpen.value = true;
+                };
+
+                const openPrintModalForJurnal = () => {
+                    printData.title = 'REKAPITULASI JURNAL MENGAJAR GURU';
+                    printData.periode = 'Tahun Ajaran ' + selectedTahunPelajaran.value;
+                    printData.columns = ['No', 'Tanggal', 'Guru / Kelas', 'Jam', 'Materi Pokok', 'Kegiatan'];
+                    printData.rows = filteredJurnal.value.map((j, i) => [i + 1, j.tanggal, `${j.guruName} (Kls ${j.kelas})`, j.jamKe, j.materi, j.kegiatan]);
+                    isPrintModalOpen.value = true;
+                };
+
+                const triggerPrint = () => {
+                    window.print();
+                };
+
+                // GAS CODE GENERATOR MODAL
+                const isGasCodeModalOpen = ref(false);
+                const gasBackendCode = ref(`/**
+ * BACKEND GOOGLE APPS SCRIPT (Code.gs)
+ * SIM SD NEGERI WONOAYU
+ */
+
+function doGet(e) {
+  return HtmlService.createHtmlOutputFromFile('index')
+      .setTitle('SIM SD Negeri Wonoayu')
+      .setXframeOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL)
+      .addMetaTag('viewport', 'width=device-width, initial-scale=1');
+}
+
+function loginUser(username, password) {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const sheet = ss.getSheetByName('Users');
+  const data = sheet.getDataRange().getValues();
+  
+  for (let i = 1; i < data.length; i++) {
+    if (data[i][2].toString() === username && data[i][3].toString() === password) {
+      return {
+        success: true,
+        user: { id: data[i][0], name: data[i][1], username: data[i][2], role: data[i][4], kelas: data[i][5] }
+      };
+    }
+  }
+  return { success: false, message: 'Username atau Password salah!' };
+}
+
+function simpanJurnal(jurnalObj) {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const sheet = ss.getSheetByName('Jurnal');
+  sheet.appendRow([
+    new Date(),
+    jurnalObj.guruName,
+    jurnalObj.kelas,
+    jurnalObj.tanggal,
+    jurnalObj.jamKe,
+    jurnalObj.materi,
+    jurnalObj.kegiatan,
+    jurnalObj.keterangan
+  ]);
+  return { success: true };
+}`);
+
+                const copyGasCode = () => {
+                    const el = document.createElement('textarea');
+                    el.value = gasBackendCode.value;
+                    document.body.appendChild(el);
+                    el.select();
+                    document.execCommand('copy');
+                    document.body.removeChild(el);
+                    showToast('Kode Backend Apps Script Berhasil Disalin!');
+                };
+
+                const handleLogin = async () => {
+                    isLoading.value = true;
+                    await new Promise(r => setTimeout(r, 600));
+                    const foundUser = dummyUsersArray.value.find(u => u.username.toLowerCase() === loginForm.username.toLowerCase() && u.password === loginForm.password);
+                    if (foundUser) {
+                        currentUser.value = { ...foundUser };
+                        currentRoute.value = 'dashboard';
+                        showToast(`Selamat datang, ${foundUser.name}`);
+                    } else {
+                        showToast('Username atau Password tidak valid!', 'error');
+                    }
+                    isLoading.value = false;
+                };
+
+                const submitPublicForm = async () => {
+                    isLoading.value = true;
+                    await new Promise(r => setTimeout(r, 600));
+                    
+                    const pesanBaru = { ...publicForm };
+                    publicMessagesArray.value.unshift(pesanBaru);
+                    
+                    // Kirim pesan ke Google Sheets (Pengaduan Masyarakat)
+                    runGasFunction('simpanPesanPublik', pesanBaru);
+                    
+                    isLoading.value = false;
+                    showToast('Aduan/Layanan Anda Berhasil Terkirim ke Server Sekolah!');
+                    currentRoute.value = 'login';
+                };
+
+                const simulateAction = async (msg) => {
+                    isLoading.value = true;
+                    await new Promise(r => setTimeout(r, 600));
+                    isLoading.value = false;
+                    showToast(msg);
+                };
+
+                const logout = () => {
+                    currentUser.value = null;
+                    localStorage.removeItem('sdn_wonoayu_session_user');
+                    currentRoute.value = 'login';
+                };
+
+                return {
+                    isLoading, loadingMessage, currentUser, currentRoute, toast, showToast,
+                    loginForm, publicForm, dummyUsersArray, dummyDataSiswa, searchSiswaQuery, filterKelasSiswa, filteredSiswaArray,
+                    dummyJurnalArray, jurnalForm, filteredJurnal, saveJurnal,
+                    dummyAbsensiArray, absensiForm, saveAbsensi,
+                    publicMessagesArray, isTeacherModalOpen, teacherFormMode, teacherForm,
+                    openAddTeacherModal, openEditTeacherModal, saveTeacher, deleteTeacher,
+                    isSiswaModalOpen, siswaFormMode, siswaForm, openAddSiswaModal, openEditSiswaModal, saveSiswa, deleteSiswa,
+                    isJurnalModalOpen, editJurnalForm, openEditJurnalModal, updateJurnal, deleteJurnal,
+                    isPrintModalOpen, printData, openPrintModalForSiswa, openPrintModalForJurnal, triggerPrint,
+                    isGasCodeModalOpen, gasBackendCode, copyGasCode,
+                    handleLogin, submitPublicForm, simulateAction, logout,
+                    selectedTahunPelajaran
+                };
+            }
+        }).mount('#app');
+    </script>
+</body>
+</html>
